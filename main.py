@@ -59,6 +59,7 @@ class interIIT():
 		self.safeStopDis = 10
 
 		self.disWallClimb = 5
+		self.disWallStepDown = 10           #decide exactly what should be the distance while stepping down
 
 	def clearMotorWriteParams(self):
 		self.speedMotor = {"left":0,"right":0}
@@ -92,7 +93,7 @@ class interIIT():
 	def comR2A(self):
 		# serial communication from Rpi to arduino
 		# writing angle of all 4 motors
-		while:
+		while True:
 			if self.ssWriteBreak:
 				break
 
@@ -109,46 +110,6 @@ class interIIT():
 		# assuming - only 2 stairs with lower level for harvesting and upper for ploughing, seeding and levelling 
 
 		# start from red zone and go till red zone is in visible range in back color sensor
-		self.PID.clear()
-		self.stopMotor()
-		while(self.isSameColor("red",self.ssColorRead["back"])):
-			self.goForward()
-
-		self.stopMotor()
-		self.clearVisOdo()
-		self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
-		self.threadVisOdo.start()
-
-		self.startHarvesting()
-		while(self.VOpos<self.blockEndDis):
-			self.goForward()
-
-		self.stopMotor()
-		self.PID.clear()
-		self.VObreak = True
-		self.threadVisOdo.join()
-
-		self.stopMotor()
-
-		while not(self.isSameColor("red",self.ssColorRead["front"])):
-			self.goBackward()
-
-		self.stopLevelling()
-
-		self.clearVisOdo()
-		self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
-		self.threadVisOdo.start()
-
-		while(self.VOpos<self.safeStopDis):
-			self.goBackward()
-
-		self.stopMotor()
-		self.PID.clear()
-		self.VObreak = True
-		self.threadVisOdo.join()
-
-		self.climbingAlgo()
-
 		self.PID.clear()
 		self.stopMotor()
 		while(self.isSameColor("red",self.ssColorRead["back"])):
@@ -204,7 +165,50 @@ class interIIT():
 		self.VObreak = True
 		self.threadVisOdo.join()
 
-	def climbingAlgo(self):
+		self.climbingDownAlgo()
+    
+		self.PID.clear()
+		self.stopMotor()
+		while(self.isSameColor("red",self.ssColorRead["back"])):
+			self.goForward()
+
+		self.stopMotor()
+		self.clearVisOdo()
+		self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
+		self.threadVisOdo.start()
+
+		self.startHarvesting()
+		while(self.VOpos<self.blockEndDis):
+			self.goForward()
+
+		self.stopMotor()
+		self.PID.clear()
+		self.VObreak = True
+		self.threadVisOdo.join()
+
+		self.stopMotor()
+		self.stopHarvesting()
+
+		while not(self.isSameColor("red",self.ssColorRead["front"])):
+			self.goBackward()
+
+		self.stopLevelling()
+
+		self.clearVisOdo()
+		self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
+		self.threadVisOdo.start()
+
+		while(self.VOpos<self.safeStopDis):
+			self.goBackward()
+
+		self.stopMotor()
+		self.PID.clear()
+		self.VObreak = True
+		self.threadVisOdo.join()
+
+		self.climbingUpAlgo()
+
+	def climbingUpAlgo(self):
 		angle = self.ssMPUangleRead
 		while(angle - 90 < self.ssMPUangleRead):
 			self.rotateLeft()
@@ -234,12 +238,74 @@ class interIIT():
 		while(time.time()-nowTime<5):
 			self.goForward(withPID=False)
 		self.stopMotor()
+    
+	def climbingDownAlgo(self):
+		angle = self.ssMPUangleRead
+		while(angle - 90 < self.ssMPUangleRead):
+			self.rotateLeft()
+		self.stopMotor()
+
+		while(self.ssUSfrontRead < self.disWallStepDown):
+			self.goBackward(withPID=False)
+		self.stopMotor()
+
+		self.setActuator(front="low",back="high")
+
+		nowTime = time.time()
+		while(time.time()-nowTime<5):
+			self.goForward(withPID=False)
+		self.stopMotor()
+
+		self.setActuator(front="high",back="high")
+
+		nowTime = time.time()
+		while(time.time()-nowTime<5):
+			self.goForward(withPID=False)
+		self.stopMotor()
+
+		self.setActuator(front="low",back="low")
+
+		nowTime = time.time()
+		while(time.time()-nowTime<2):
+			self.goForward(withPID=False)
+		self.stopMotor()
 
 		angle = self.ssMPUangleRead
 		while(angle + 90 > self.ssMPUangleRead):
 			self.rotateRight()
 		self.stopMotor()
 
+	def climbingUpAlgo(self):
+		angle = self.ssMPUangleRead
+		while(angle - 90 < self.ssMPUangleRead):
+			self.rotateLeft()
+		self.stopMotor()
+
+		while(self.ssUSfrontRead > self.disWallClimb):
+			self.goForward(withPID=False)
+		self.stopMotor()
+
+		self.setActuator(front="high",back="high")
+
+		nowTime = time.time()
+		while(time.time()-nowTime<2):
+			self.goForward(withPID=False)
+		self.stopMotor()
+
+		self.setActuator(front="low",back="high")
+
+		nowTime = time.time()
+		while(time.time()-nowTime<5):
+			self.goForward(withPID=False)
+		self.stopMotor()
+
+		self.setActuator(front="low",back="low")
+
+		nowTime = time.time()
+		while(time.time()-nowTime<5):
+			self.goForward(withPID=False)
+		self.stopMotor()
+    
 	def setActuator(self,front,back):
 		self.actuatorValue["front"] = self.ActAngle[front]["front"]
 		self.actuatorValue["back"]  = self.ActAngle[back]["back"]
