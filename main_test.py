@@ -7,24 +7,24 @@ import RPi.GPIO as GPIO
 from PID import PID
 import serial
 
-
 GPIO.setmode(GPIO.BOARD)
 
 class interIIT():
     def __init__(self):
         self.defSetGpioPins()
         #self.defVisOdoConst()
+        self.defStepperConst()
         self.defSensorConst()
         self.defPIDinstance()
         self.defStepClimbConst()
         self.defMotorSpeed()
-        #self.defSerComConst()
+        self.defSerComConst()
 
         self.clearSensorReadParams()
         self.clearMotorWriteParams()
         self.clearVOparams()
 
-        #self.startProcess()
+        self.startProcess()
         while(True):
             self.ssReadColor()
 
@@ -54,6 +54,9 @@ class interIIT():
         # self.VOsift = cv2.xfeatures2d.SIFT_create()
         # self.VObf = cv2.BFMatcher()
 
+    def defStepperConst(self):
+        self.servoStepAngle = 1.8
+
     def defSensorConst(self):
         self.ssColorValues = {
             "red":{"acc":[255,0,0],"lower":[200,-1,-1],"upper":[260,40,40]},
@@ -68,22 +71,19 @@ class interIIT():
         self.ssColorNumCycle = 50
 
     def defPIDinstance(self):
-        self.PID = PID(P=0.2,I=0.1,D=0.3)
+        self.PID = +PID(P=0.4,I=0.1,D=0.3)
 
     def defMotorSpeed(self):
         self.speed = {}
-        self.speed["front"] = {"left": 200,"right": 200}
-        self.speed["back"]  = {"left":-200,"right":-200}
-        self.speed["left"]  = {"left":-200,"right": 200}
-        self.speed["right"] = {"left": 200,"right":-200}
+        self.speed["front"] = {"left": 5,"right": 5}
+        self.speed["back"]  = {"left":-5,"right":-5}
+        self.speed["left"]  = {"left":-5,"right": 5}
+        self.speed["right"] = {"left": 5,"right":-5}
 
         self.ActAngle = {"high":{"front":0,"back":0},"low":{"front":90,"back":90}}
 
     def defSerComConst(self):
         self.messenger = serial.Serial('/dev/ttyACM1', 9600)
-        self.msgStatus = 0
-        self.msgStatusRead = -1
-        self.msgStatusWrite = 1
 
     def defStepClimbConst(self):
         #decide exactly what should be the distance while stepping down
@@ -131,27 +131,7 @@ class interIIT():
 
         self.seedServo = self.seedRestAngle
 
-        self.harvestServo = False
-
-    def comA2R(self):
-        # to be changed
-        # serial communication from arduino to Rpi
-        while True:
-            if(self.msgStatus==self.msgStatusRead):
-                self.msgRead = (self.messenger.readline()).split(" ")
-                if(self.msgRead[0] == ""):
-                    x = 0
-                self.ssMPUangleRead = 0.0
-                if self.ssReadBreak:
-                    self.msgStatus = self.msgStatusWrite
-                    break
-
-    def comR2A(self):
-        # serial communication from Rpi to arduino
-        # writing angle of all 4 motors
-        while True:
-            if self.ssWriteBreak:
-                break
+        self.harvestServo = False        
 
     def VisOdo(self):
         self.VOpos 
@@ -245,6 +225,7 @@ class interIIT():
         self.ReadingSensor = True
         self.threadssRead = threading.Thread(target=self.ssRead,args=())
         self.threadssRead.start()
+        self.rootMPUangle = self.ssMPUangleRead
         # assuming - only 2 stairs with lower level for harvesting and upper for ploughing, seeding and levelling 
 
     def otherProcess(self):
@@ -256,8 +237,8 @@ class interIIT():
 
         self.stopMotor()
         self.clearVisOdo()
-        self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
-        self.threadVisOdo.start()
+        # self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
+        # self.threadVisOdo.start()
 
         while(self.VOpos<self.safeStartDis):
             self.goForward()
@@ -275,7 +256,7 @@ class interIIT():
             self.goBackward()
 
         self.VObreak = True
-        self.threadVisOdo.join()
+        # self.threadVisOdo.join()
 
         self.stopMotor()
         self.startSeeding()
@@ -293,8 +274,8 @@ class interIIT():
         self.stopLevelling()
 
         self.clearVisOdo()
-        self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
-        self.threadVisOdo.start()
+        # self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
+        # self.threadVisOdo.start()
 
         while(self.VOpos<self.safeStopDis):
             self.goBackward()
@@ -302,7 +283,7 @@ class interIIT():
         self.stopMotor()
         self.PID.clear()
         self.VObreak = True
-        self.threadVisOdo.join()
+        # self.threadVisOdo.join()
 
         self.climbingDownAlgo()
     
@@ -313,8 +294,8 @@ class interIIT():
 
         self.stopMotor()
         self.clearVisOdo()
-        self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
-        self.threadVisOdo.start()
+        # self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
+        # self.threadVisOdo.start()
 
         self.startHarvesting()
         while(self.VOpos<self.blockEndDis):
@@ -323,7 +304,7 @@ class interIIT():
         self.stopMotor()
         self.PID.clear()
         self.VObreak = True
-        self.threadVisOdo.join()
+        # self.threadVisOdo.join()
 
         self.stopMotor()
         self.stopHarvesting()
@@ -334,8 +315,8 @@ class interIIT():
         self.stopLevelling()
 
         self.clearVisOdo()
-        self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
-        self.threadVisOdo.start()
+        # self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
+        # self.threadVisOdo.start()
 
         while(self.VOpos<self.safeStopDis):
             self.goBackward()
@@ -343,7 +324,7 @@ class interIIT():
         self.stopMotor()
         self.PID.clear()
         self.VObreak = True
-        self.threadVisOdo.join()
+        # self.threadVisOdo.join()
 
         self.climbingUpAlgo()
 
@@ -376,9 +357,7 @@ class interIIT():
         self.stopMotor()
 
     def climbingDownAlgo(self):
-        angle = self.ssMPUangleRead
-        while(angle - 90 < self.ssMPUangleRead):
-            self.rotateLeft()
+        self.rotateLeft()
         self.stopMotor()
 
         while(self.ssUSfrontRead < self.stepDdisWallW1):
@@ -403,9 +382,7 @@ class interIIT():
             self.goBackward(withPID=False)
         self.stopMotor()
 
-        angle = self.ssMPUangleRead
-        while(angle + 90 > self.ssMPUangleRead):
-            self.rotateRight()
+        self.rotateRight()
         self.stopMotor()
 
     def setActuator(self,front,back):
@@ -421,41 +398,80 @@ class interIIT():
     def goBot(self,goDir,withPID=True):
         if(withPID):
             output = self.PID.update(np.avg(self.ssUSpidRead))
+            angle = self.ssMPUangleRead - self.rootMPUangle
         else:
             output = 0
-        self.setMotorSpeed(baseSpeed=self.speed[goDir],pid=output)
+            angle = 0
+        self.setMotorSpeed(baseSpeed=self.speed[goDir],pid=output,angle=angle)
+
+    def setMotorSpeed(self,baseSpeed,pid,angle):
+        # self.speedMotor["left"]  = baseSpeed - pid - angle*10 # check sign
+        # self.speedMotor["right"] = baseSpeed + pid + angle*10 # sign : negative of left
+        # no change in actuator angles
+        leftSpeed  = baseSpeed - pid - angle/10
+        rightSpeed = baseSpeed  + pid + angle/10
+        self.goMotor(int(leftSpeed),int(rightSpeed))
+
+    def sendSerial(self,code):
+        # x = (chr(code)).encode()
+        self.messenger.write(chr(code))
+
+    def goMotor(self,leftSpeed,rightSpeed):
+        leftSteps = abs(leftSpeed)
+        rightSteps = abs(rightSpeed)
+        leftDir = 2*(0<leftSpeed)-1
+        rightDir = 2*(0<rightSpeed)-1
+        noSteps = max(leftSteps,rightSteps)
+        code = 0
+        for i in range(noSteps):
+            x = leftSteps>i
+            code += x*(1==leftDir)
+            code += x*(-1==leftDir)*16
+            x = rightSteps>i
+            code += x*(1==rightDir)*2
+            code += x*(-1==rightDir)*32
+            self.sendSerial(code)
 
     def rotateLeft(self):
-        self.setMotorSpeed(baseSpeed=self.speed["left"],pid=0)
+        self.setRotate(dir=+1)
 
     def rotateRight(self):
-        self.setMotorSpeed(baseSpeed=self.speed["right"],pid=0)
+        self.setRotate(Dir=-1)
+
+    def setRotate(self,Dir):
+        if(Dir==1):
+            self.sendSerial(18)
+        elif(Dir==1):
+            self.sendSerial(33)
 
     def stopMotor(self):
         self.speedMotor = {"left":0,"right":0}
 
-    def setMotorSpeed(self,baseSpeed,pid):
-        self.speedMotor["left"]  = baseSpeed - pid # check sign
-        self.speedMotor["right"] = baseSpeed + pid # sign : negative of left
-        # no change in actuator angles
+    def setFarmServo(self,angle):
+        if(self.farmServo<angle):
+            self.farmServo += self.servoStepAngle
+            # send write via serial communication
+        elif(self.farmServo>angle):
+            self.farmServo -= self.servoStepAngle
+            # send write via serial communication
 
     def startPloughing(self):
-        self.farmServo = self.ploughAngle
+        self.setFarmServo(self.ploughAngle)
 
     def stopPloughing(self):
-        self.farmServo = self.restAngle
+        self.setFarmServo(self.restAngle)
 
     def startSeeding(self):
-        self.seedServo = self.seedingAngle
+        self.setFarmServo(self.seedingAngle)
 
     def stopSeeding(self):
-        self.seedServo = self.seedRestAngle
+        self.setFarmServo(self.seedRestAngle)
 
     def startLevelling(self):
-        self.farmServo = self.levelAngle
+        self.setFarmServo(self.levelAngle)
 
     def stopLevelling(self):
-        self.farmServo = self.restAngle
+        self.setFarmServo(self.restAngle)
 
     def startHarvesting(self):
         self.harvestServo = True
