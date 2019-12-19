@@ -3,7 +3,7 @@ import numpy as np
 #import matplotlib.pyplot as plt
 import threading
 import time
-# import RPi.GPIO as GPIO
+import RPi.GPIO as GPIO
 from PID import PID
 import serial
 import math
@@ -118,7 +118,7 @@ class interIIT():
 
         self.safeStartDis = 10
         self.startSeedDis = 30
-        self.blockEndDis = 200
+        self.blockEndDis = 10
         self.safeStopDis = 10
 
     def clearMotorWriteParams(self):
@@ -228,47 +228,42 @@ class interIIT():
         # assuming - only 2 stairs with lower level for harvesting and upper for ploughing, seeding and levelling 
 
         # start from red zone and go till red zone is in visible range in back color sensor
-        self.PID.clear()
-        self.stopMotor()
-        # while(self.isSameColor("red",self.ssColorRead["back"])):
-        #     self.goForward()
-        print("forward")
+        self.goPlough()
 
-        self.stopMotor()
+        self.goSeed()
+
+        self.goDown()
+
+        self.goHarvest()
+
+        self.goBack()
+
+    def goPlough(self):
+        self.PID.clear()
+        while(self.isSameColor("red",self.ssColorRead["back"])):
+            self.goForward()
+
         self.clearVOparams()
 
         while(self.VOpos<self.safeStartDis):
-            print(self.VOpos,self.safeStartDis)
             self.goForward()
-            time.sleep(1)
-
-        self.stopMotor()
 
         self.startPloughing()
-        while(self.VOpos<self.blockEndDis):
-            print(self.VOpos,self.blockEndDis)
+        while(self.ssUSfrontRead>self.blockEndDis):
             self.goForward()
-            time.sleep(1)
 
-        print("success")
-        return
-        self.stopMotor()
         self.PID.clear()
 
-        while(self.VOpos>(self.blockEndDis-self.startSeedDis)):
+    def goSeed(self):
+        while(self.ssUSfrontRead<(self.blockEndDis+self.startSeedDis)):
             self.goBackward()
 
-        self.VObreak = True
-        # self.threadVisOdo.join()
-
-        self.stopMotor()
         self.startSeeding()
         self.startLevelling()
 
         while not(self.isSameColor("red",self.ssColorRead["back"])):
             self.goBackward()
 
-        self.stopMotor()
         self.stopSeeding()
 
         while not(self.isSameColor("red",self.ssColorRead["front"])):
@@ -277,45 +272,33 @@ class interIIT():
         self.stopLevelling()
 
         self.clearVOparams()
-        # self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
-        # self.threadVisOdo.start()
-
         while(self.VOpos<self.safeStopDis):
             self.goBackward()
 
-        self.stopMotor()
         self.PID.clear()
-        self.VObreak = True
-        # self.threadVisOdo.join()
+        self.clearVOparams()
 
+    def goDown(self):
         self.climbingDownAlgo()
     
+    def goHarvest(self):
         self.PID.clear()
-        self.stopMotor()
-        while(self.isSameColor("red",self.ssColorRead["back"])):
+        while(self.isSameColor("yellow",self.ssColorRead["back"])):
             self.goForward()
 
-        self.stopMotor()
         self.clearVOparams()
-        # self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
-        # self.threadVisOdo.start()
 
         self.startHarvesting()
         while(self.VOpos<self.blockEndDis):
             self.goForward()
 
-        self.stopMotor()
         self.PID.clear()
-        self.VObreak = True
-        # self.threadVisOdo.join()
 
-        self.stopMotor()
         self.stopHarvesting()
 
-        while not(self.isSameColor("red",self.ssColorRead["front"])):
+    def goBack(self):
+        while not(self.isSameColor("yellow",self.ssColorRead["front"])):
             self.goBackward()
-
-        self.stopLevelling()
 
         self.clearVOparams()
         # self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
@@ -327,8 +310,8 @@ class interIIT():
         self.stopMotor()
         self.PID.clear()
         self.VObreak = True
-        # self.threadVisOdo.join()
 
+    def goUp(self):
         self.climbingUpAlgo()
 
     def climbingUpAlgo(self):
