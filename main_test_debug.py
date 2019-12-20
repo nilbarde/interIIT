@@ -26,6 +26,9 @@ class interIIT():
         self.clearMotorWriteParams()
         self.clearVOparams()
 
+        self.stopSeeding()
+        self.stopPloughing()
+
         self.startProcess()
         # while(True):
         #     self.ssReadColor()
@@ -306,6 +309,7 @@ class interIIT():
             self.goForward()
 
         self.PID.clear()
+        self.stopPloughing()
 
     def goSeed(self):
         while(self.ssUSfrontRead<(self.blockEndDis+self.startSeedDis)):
@@ -453,10 +457,9 @@ class interIIT():
         self.goMotor(int(leftSpeed),int(rightSpeed))
 
     def sendSerial(self,code):
-        # x = (chr(code)).encode()
         print(code)
+        self.messenger.write(str(code))
         return
-        self.messenger.write(chr(code))
 
     def goMotor(self,leftSpeed,rightSpeed):
         leftSteps = abs(leftSpeed)
