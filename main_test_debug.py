@@ -7,6 +7,7 @@ import RPi.GPIO as GPIO
 from PID import PID
 import serial
 import math
+import smbus
 
 # GPIO.setmode(GPIO.BOARD)
 
@@ -73,6 +74,52 @@ class interIIT():
             "back":[0,0,0],
             }
         self.ssColorNumCycle = 50
+
+        self.PWR_MGMT_1   = 0x6B
+        self.SMPLRT_DIV   = 0x19
+        self.CONFIG       = 0x1A
+        self.GYRO_CONFIG  = 0x1B
+        self.INT_ENABLE   = 0x38
+        self.ACCEL_XOUT_H = 0x3B
+        self.ACCEL_YOUT_H = 0x3D
+        self.ACCEL_ZOUT_H = 0x3F
+        self.GYRO_XOUT_H  = 0x43
+        self.GYRO_YOUT_H  = 0x45
+        self.GYRO_ZOUT_H  = 0x47
+
+        self.bus = smbus.SMBus(1)    # or bus = smbus.SMBus(0) for older version boards
+        self.Device_Address = 0x68   # MPU6050 device address
+
+        self.MPU_Init()
+
+    def MPU_Init(self):
+        #write to sample rate register
+        self.bus.write_byte_data(self.Device_Address, self.SMPLRT_DIV, 7)
+        
+        #Write to power management register
+        self.bus.write_byte_data(self.Device_Address, self.PWR_MGMT_1, 1)
+        
+        #Write to Configuration register
+        self.bus.write_byte_data(self.Device_Address, self.CONFIG, 0)
+        
+        #Write to Gyro configuration register
+        self.bus.write_byte_data(self.Device_Address, self.GYRO_CONFIG, 24)
+        
+        #Write to interrupt enable register
+        self.bus.write_byte_data(self.Device_Address, self.INT_ENABLE, 1)
+
+    def read_raw_data(self,addr):
+        #Accelero and Gyro value are 16-bit
+        high = self.bus.read_byte_data(self.Device_Address, addr)
+        low = self.bus.read_byte_data(self.Device_Address, addr+1)
+
+        #concatenate higher and lower value
+        value = ((high << 8) | low)
+        
+        #to get signed value from mpu6050
+        if(value > 32768):
+                value = value - 65536
+        return value
 
     def defPIDinstance(self):
         self.PID = PID(P=0.4,I=0.1,D=0.3)
@@ -148,10 +195,9 @@ class interIIT():
             self.ssColorFrontRead = [0,0,0]
             self.ssColorBackRead = [0,0,0]
 
-            # self.ssReadUS()
-            # self.ssReadColor()
-            print("good")
-            time.sleep(1)
+            self.ssReadUS()
+            self.ssReadColor()
+            self.ssReadMPU()
 
     def ssReadUS(self):
         for pin in self.ssUSpidRead:
@@ -189,7 +235,6 @@ class interIIT():
         self.ssUSfrontRead = timeElapsed*17150 + 1.15
         print(self.ssUSfrontRead,"  ","front")
 
-
     def ssReadColor(self):
         for pin in ["front"]:
             GPIO.output(self.pinsColorS2[pin],False)
@@ -220,6 +265,12 @@ class interIIT():
             self.ssColorRead[pin][2] = self.ssColorNumCycle/duration
             print(self.ssColorRead[pin])
 
+    def ssReadMPU(self):
+        self.gyro_x = self.read_raw_data(self.GYRO_XOUT_H)
+        self.gyro_y = self.read_raw_data(self.GYRO_YOUT_H)
+        self.gyro_z = self.read_raw_data(self.GYRO_ZOUT_H)
+        self.ssMPUangleRead = self.gyro_z
+
     def startProcess(self):
         self.ReadingSensor = True
         self.threadssRead = threading.Thread(target=self.ssRead,args=())
@@ -237,6 +288,8 @@ class interIIT():
         self.goHarvest()
 
         self.goBack()
+
+        self.goUp()
 
     def goPlough(self):
         self.PID.clear()
@@ -301,8 +354,6 @@ class interIIT():
             self.goBackward()
 
         self.clearVOparams()
-        # self.threadVisOdo = threading.Thread(target=self.VisOdo,args=())
-        # self.threadVisOdo.start()
 
         while(self.VOpos<self.safeStopDis):
             self.goBackward()
